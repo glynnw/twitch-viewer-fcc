@@ -1,0 +1,121 @@
+function createJSONPReq(query, object, callback) {
+  const callbackStr = `_func_${object}_${Math.trunc(Math.random() * 10000)}`;
+  const script = document.createElement('script');
+  script.src = `https://wind-bow.gomix.me/twitch-api/${object}/${query}?callback=${callbackStr}`;
+  document.body.appendChild(script);
+  window[callbackStr] = (data) => {
+    callback(data);
+    document.body.removeChild(script);
+  };
+}
+
+class StreamList {
+  constructor(streamNames) {
+    this._streams = [];
+    this._twitchStreams = document.querySelector('.twitch-streams');
+    this._streamsListDiv = document.createElement('div');
+    this._streamsListDiv.className = 'stream-list'
+    this._twitchStreams.appendChild(this._streamsListDiv);
+
+    streamNames.forEach((streamer) => {
+      const stream = new Stream(streamer);
+      this._streams.push(stream);
+    });
+  }
+
+  displayOnlineStreams() {
+    const onlineStreams = this._streams.filter((stream) => stream.online());
+    this._buildList(onlineStreams);
+  }
+
+  displayOfflineStreams() {
+    const offlineStreams = this._streams.filter((stream) => !stream.online());
+    this._buildList(offlineStreams);
+  }
+
+  _buildList(streams) {
+    this._streamsListDiv.innerHTML = "";
+    streams.forEach((stream) => {
+      this._streamsListDiv.appendChild(stream.toDOMNode());
+    });
+  }
+
+  displayAllStreams() {
+    this._buildList(this._streams);
+  }
+}
+
+class Stream {
+  constructor(name) {
+    this._link = document.createElement('a');
+    this._img = document.createElement('img');
+    this._title = document.createElement('h3');
+    this._status = document.createElement('span');
+    this._viewers = document.createElement('p');
+
+    this._title.innerHTML = name;
+    this._online = false;
+
+    this._link.className = 'stream';
+    this._img.className = 'stream__img';
+    this._title.className = 'stream__title';
+    this._status.className = 'stream__status';
+    this._viewers.className = 'viewers';
+    this._link.appendChild(this._img);
+    this._link.appendChild(this._title);
+    this._link.appendChild(this._status);
+    
+    const self = this;
+    createJSONPReq(name, 'channels', (data) => {
+      if (data.status === 404) {
+        self._link.innerHTML = `<p>User ${name} ${data.error}</p>`;
+        self._link.classList.add('not-found');
+      } else {
+        self._link.href = data.url;
+        self._img.src = data.logo;
+        createJSONPReq(name, 'streams', (data) => {
+          if (data.stream !== null && data.stream !== undefined) {
+            self._online = true;
+            self._status.innerHTML = `${data.stream.game}:${data.stream.channel.status}`;
+            self._link.style.background = `url(${data.stream.preview.medium})`;
+            self._viewers.innerHTML = `<i class='fa fa-users'></i>${data.stream.viewers}`;
+            self._link.appendChild(this._viewers);
+          } else if (data.status === 404) {
+            self._status.innerHTML = `User: ${data.error}`;
+          } else {
+            self._status.innerHTML = 'Offline';
+          }
+        });
+      }
+    });
+  }
+
+  toDOMNode() {
+    return this._link;
+  }
+
+  online() {
+    return this._online;
+  }
+}
+
+window.addEventListener('load', () => {
+  const streamersArr = ["ESL_SC2", "OgamingSC2", "cretetion",
+                        "freecodecamp", "storbeck", "habathcx",
+                        "RobotCaleb", "noobs2ninjas", "brunofin", "comster404"];
+
+  const streamList = new StreamList(streamersArr);
+  streamList.displayAllStreams();
+
+  document.querySelector(".offline-btn").addEventListener('click', () => {
+    streamList.displayOfflineStreams();
+  });
+
+  document.querySelector(".online-btn").addEventListener('click', () => {
+    streamList.displayOnlineStreams();
+  });
+
+  document.querySelector(".all-btn").addEventListener('click', () => {
+    streamList.displayAllStreams();
+  });
+});
